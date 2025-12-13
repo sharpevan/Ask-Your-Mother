@@ -1,0 +1,5 @@
+feedparser
+pymongo
+dnspython
+google-genai
+streamlit

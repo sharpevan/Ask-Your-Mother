@@ -1,65 +1,118 @@
 import streamlit as st
 import pymongo
 import re
+import smtplib
+import certifi
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 
 # --- CONFIGURATION ---
-# In production, we will load this from "Secrets" (Environment Variables)
-# For testing locally, paste your connection string here.
-MONGO_URI = "mongodb+srv://evansharp_db_user:xyz@clusterduck.asjjrav.mongodb.net/?retryWrites=true&w=majority"
+MONGO_URI = st.secrets["MONGO_URI"]
+EMAIL_PASSWORD = st.secrets.get("EMAIL_PASSWORD") 
+EMAIL_SENDER = "evan.sharp.303@gmail.com"
 
-# --- PAGE SETUP ---
 st.set_page_config(page_title="Ask Your Mother", page_icon="☕")
 
-# Custom CSS to make it look like your email brand
+# --- STYLES ---
 st.markdown("""
 <style>
-    .main {max-width: 600px; margin: 0 auto;}
-    h1 {text-transform: uppercase; letter-spacing: -1px; text-align: center;}
+    .main {max-width: 600px; margin: 0 auto; font-family: Helvetica;}
+    h1 {text-transform: uppercase; letter-spacing: -1px; text-align: center; color: #333;}
     .subtitle {text-align: center; color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; margin-top: -15px; margin-bottom: 40px;}
-    .stButton button {width: 100%; background-color: #333; color: white; border-radius: 4px;}
-    .stButton button:hover {background-color: #555; border-color: #555;}
+    .stButton button {width: 100%; background-color: #333; color: white; border-radius: 4px; border: none; padding: 10px;}
+    .stButton button:hover {background-color: #555;}
 </style>
 """, unsafe_allow_html=True)
 
-# --- HEADER ---
+# --- FUNCTIONS ---
+def send_welcome_email(recipient):
+    """Sends the 'Welcome to the club' note to the new user."""
+    if not EMAIL_PASSWORD: return
+    
+    msg = MIMEMultipart()
+    msg['From'] = "The Dad Magazine <" + EMAIL_SENDER + ">"
+    msg['To'] = recipient
+    msg['Subject'] = "Welcome to the Club ☕"
+    
+    html = """
+    <div style="font-family: Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="text-transform: uppercase; letter-spacing: -1px;">You're on the list.</h2>
+        <p>Thanks for subscribing to <strong>Ask Your Mother</strong>.</p>
+        <p>Every Friday morning, you'll get a curated digest of:</p>
+        <ul>
+            <li>3 Articles worth reading</li>
+            <li>1 Podcast for the commute</li>
+            <li>1 Video to watch</li>
+        </ul>
+        <p>No spam, just the good stuff.</p>
+        <p>- Evan</p>
+    </div>
+    """
+    msg.attach(MIMEText(html, 'html'))
+    
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            server.send_message(msg)
+    except Exception as e:
+        print(f"Welcome email failed: {e}")
+
+def send_admin_notification(new_subscriber):
+    """NEW: Sends an alert to YOU when someone signs up."""
+    if not EMAIL_PASSWORD: return
+    
+    msg = MIMEMultipart()
+    msg['From'] = "Signup Bot <" + EMAIL_SENDER + ">"
+    msg['To'] = EMAIL_SENDER  # Sends to yourself
+    msg['Subject'] = f"New Subscriber! 🚀 ({new_subscriber})"
+    
+    body = f"Heads up! {new_subscriber} just joined the list."
+    msg.attach(MIMEText(body, 'plain'))
+    
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            server.send_message(msg)
+    except Exception as e:
+        print(f"Admin notification failed: {e}")
+
+# --- MAIN APP ---
 st.title("Ask Your Mother")
 st.markdown('<p class="subtitle">The Weekly Man-ual for Dads (0-5y)</p>', unsafe_allow_html=True)
 
-st.write("""
-**Tired of "Mommy Blogs" and generic advice?** Get a curated weekly digest of the best parenting content for dads. 
-3 Articles (Read), 1 Podcast (Listen), and 1 Video (Watch). No fluff.
-""")
+st.write("Tired of generic parenting advice? Get the curated weekly digest for dads. 3 Reads, 1 Listen, 1 Watch.")
 
-# --- FORM ---
 with st.form("signup_form"):
     email = st.text_input("Enter your email address", placeholder="dad@example.com")
     submitted = st.form_submit_button("Subscribe")
 
     if submitted:
-        if email:
-            # 1. Validate Email (Simple Regex)
-            if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-                st.error("Please enter a valid email address.")
-            else:
-                # 2. Connect to Mongo
-                try:
-                    client = pymongo.MongoClient(MONGO_URI)
-                    db = client.dad_digest_db
-                    subscribers = db.subscribers
+        if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
+            try:
+                # SSL FIX: Added tlsCAFile
+                client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
+                db = client.dad_digest_db
+                subscribers = db.subscribers
+                
+                if subscribers.find_one({"email": email}):
+                    st.warning("You are already on the list!")
+                else:
+                    subscribers.insert_one({
+                        "email": email,
+                        "joined_at": datetime.now(),
+                        "active": True
+                    })
                     
-                    # 3. Check for duplicates
-                    if subscribers.find_one({"email": email}):
-                        st.warning("Nice try, buddy! You are already subscribed!")
-                    else:
-                        # 4. Save to DB
-                        subscribers.insert_one({
-                            "email": email,
-                            "joined_at": "today", # We'll fix date handling later
-                            "active": True
-                        })
-                        st.success("Welcome to the club, big dawg! Check your inbox on Fridays.")
-                        st.balloons()
-                except Exception as e:
-                    st.error(f"Database Error: {e}")
+                    # 1. Send welcome to them
+                    send_welcome_email(email)
+                    
+                    # 2. Send alert to YOU
+                    send_admin_notification(email)
+                    
+                    st.success("Welcome aboard! Check your inbox for a confirmation.")
+                    st.balloons()
+            except Exception as e:
+                st.error(f"Something went wrong: {e}")
         else:
-            st.warning("Please enter an email address.")
+            st.error("Please enter a valid email address.")

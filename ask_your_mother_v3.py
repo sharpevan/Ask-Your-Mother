@@ -3,7 +3,8 @@ import smtplib
 import re
 import random
 import pymongo
-import os  # <--- NEW: Must import this to read cloud secrets
+import os
+import certifi
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -72,14 +73,19 @@ def fetch_content():
     content_pool = {'read': [], 'listen': [], 'watch': []}
     window_start = datetime.now() - timedelta(days=30)
     
-    # Mongo Check
+    # Mongo Check (Now with SSL Fix)
     try:
-        client = pymongo.MongoClient(MONGO_URI)
+        # We force the SSL certificate path here
+        client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
         db = client.dad_digest_db
         archive = db.articles
+        # Quick test to see if connection actually works
+        client.admin.command('ping')
         mongo_active = True
-    except:
+        print("Connected to MongoDB!")
+    except Exception as e:
         mongo_active = False
+        print(f"MongoDB unavailable (running in offline mode): {e}")
 
     def process_feeds(feed_list, category):
         for url in feed_list:
@@ -94,13 +100,17 @@ def fetch_content():
                         dt_published = datetime(*published[:6])
                         if dt_published > window_start:
                             
-                            # Deduplication: Skip if link exists in Mongo
-                            if mongo_active and archive.find_one({"link": entry.link}):
+                            # SAFETY FIX: Handle missing links gracefully
+                            link = entry.get('link', entry.get('guid', ''))
+                            if not link: continue
+
+                            # Deduplication
+                            if mongo_active and archive.find_one({"link": link}):
                                 continue
                             
                             content_pool[category].append({
                                 'title': entry.title,
-                                'link': entry.link,
+                                'link': link,
                                 'summary': clean_html(entry.get('summary', '') or entry.get('title', '')),
                                 'source': source_title.upper(),
                                 'type': category

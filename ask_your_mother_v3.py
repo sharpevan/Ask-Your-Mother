@@ -1,8 +1,9 @@
 import feedparser
 import smtplib
 import re
-import random 
+import random
 import pymongo
+import os  # <--- NEW: Must import this to read cloud secrets
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -10,11 +11,16 @@ from google import genai
 from google.genai import types
 
 # --- CONFIGURATION ---
-# IMPORTANT: When we push to GitHub, we will remove these keys.
-# For now, keep them here to run locally.
-GEMINI_API_KEY = "XYZ"
-EMAIL_PASSWORD = "ABC"
-EMAIL_SENDER = "myemail"
+# We use .get() so it doesn't crash if a key is missing locally
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
+EMAIL_SENDER = "evan.sharp.303@gmail.com"
+MONGO_URI = os.environ.get("MONGO_URI")
+
+# If running locally without a .env file, you can uncomment these lines for testing:
+# GEMINI_API_KEY = "Your-Key"
+# EMAIL_PASSWORD = "Your-Pass"
+# MONGO_URI = "Your-URI"
 
 # MONGODB CONNECTION
 MONGO_URI = "mongodb+srv://evansharp_db_user:poop@clusterduck.asjjrav.mongodb.net/?retryWrites=true&w=majority"

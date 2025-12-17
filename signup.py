@@ -2,18 +2,17 @@ import streamlit as st
 import pymongo
 import re
 import smtplib
+import certifi 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 # --- CONFIGURATION ---
-# This tries to load secrets from Cloud first, then falls back to local computer
 try:
     MONGO_URI = st.secrets["MONGO_URI"]
     EMAIL_PASSWORD = st.secrets.get("EMAIL_PASSWORD")
-except FileNotFoundError:
-    # If running locally without .streamlit/secrets.toml, this will fail gracefully
-    st.error("Secrets not found. Please make sure you have a .streamlit/secrets.toml file locally.")
+except:
+    st.error("Secrets not found. Please check your .streamlit/secrets.toml file.")
     st.stop()
 
 EMAIL_SENDER = "evan.sharp.303@gmail.com"
@@ -33,14 +32,11 @@ st.markdown("""
 
 # --- FUNCTIONS ---
 def send_welcome_email(recipient):
-    """Sends the 'Welcome to the club' note to the new user."""
     if not EMAIL_PASSWORD: return
-    
     msg = MIMEMultipart()
     msg['From'] = "The Man-ual for Dads <" + EMAIL_SENDER + ">"
     msg['To'] = recipient
     msg['Subject'] = "Welcome! ☕"
-    
     html = """
     <div style="font-family: Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2 style="text-transform: uppercase; letter-spacing: -1px;">You're on the list.</h2>
@@ -56,7 +52,6 @@ def send_welcome_email(recipient):
     </div>
     """
     msg.attach(MIMEText(html, 'html'))
-    
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(EMAIL_SENDER, EMAIL_PASSWORD)
@@ -65,17 +60,13 @@ def send_welcome_email(recipient):
         print(f"Welcome email failed: {e}")
 
 def send_admin_notification(new_subscriber):
-    """Sends an alert to YOU when someone signs up."""
     if not EMAIL_PASSWORD: return
-    
     msg = MIMEMultipart()
     msg['From'] = "Signup Bot <" + EMAIL_SENDER + ">"
     msg['To'] = EMAIL_SENDER
     msg['Subject'] = f"New Subscriber! 🚀 ({new_subscriber})"
-    
     body = f"Heads up! {new_subscriber} just joined the list."
     msg.attach(MIMEText(body, 'plain'))
-    
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(EMAIL_SENDER, EMAIL_PASSWORD)
@@ -96,9 +87,9 @@ with st.form("signup_form"):
     if submitted:
         if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
             try:
-                # --- THE FIX ---
-                # We force the app to bypass the SSL check that is failing in the cloud
-                client = pymongo.MongoClient(MONGO_URI, tlsAllowInvalidCertificates=True)
+                # --- FINAL CLOUD FIX ---
+                # We use certifi.where() which works best on Streamlit Cloud servers
+                client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
                 
                 db = client.dad_digest_db
                 subscribers = db.subscribers
@@ -111,10 +102,8 @@ with st.form("signup_form"):
                         "joined_at": datetime.now(),
                         "active": True
                     })
-                    
                     send_welcome_email(email)
                     send_admin_notification(email)
-                    
                     st.success("Welcome aboard! Check your inbox for a confirmation.")
                     st.balloons()
             except Exception as e:

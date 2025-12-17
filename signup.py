@@ -31,9 +31,9 @@ def send_welcome_email(recipient):
     if not EMAIL_PASSWORD: return
     
     msg = MIMEMultipart()
-    msg['From'] = "The Dad Magazine <" + EMAIL_SENDER + ">"
+    msg['From'] = "The Man-ual for Dads <" + EMAIL_SENDER + ">"
     msg['To'] = recipient
-    msg['Subject'] = "Welcome to the Club ☕"
+    msg['Subject'] = "Welcome! ☕"
     
     html = """
     <div style="font-family: Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -79,9 +79,9 @@ def send_admin_notification(new_subscriber):
 
 # --- MAIN APP ---
 st.title("Ask Your Mother")
-st.markdown('<p class="subtitle">The Weekly Man-ual for Dads (0-5y)</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">The Weekly Man-ual for Dads with Young (0-5) Kids </p>', unsafe_allow_html=True)
 
-st.write("Tired of generic parenting advice? Get the curated weekly digest for dads. 3 Reads, 1 Listen, 1 Watch.")
+st.write("Signup to get a short curated weekly digest for Dads. Each week you'll get: 3 Articles, 1 Podcast, & 1 Video.")
 
 with st.form("signup_form"):
     email = st.text_input("Enter your email address", placeholder="dad@example.com")
@@ -91,7 +91,8 @@ with st.form("signup_form"):
         if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
             try:
                 # SSL FIX: Added tlsCAFile
-                client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
+                # Bypass SSL verification to fix the Mac/Colombia connection issue
+                client = pymongo.MongoClient(MONGO_URI, tlsAllowInvalidCertificates=True)
                 db = client.dad_digest_db
                 subscribers = db.subscribers
                 

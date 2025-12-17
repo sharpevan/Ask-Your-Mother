@@ -2,14 +2,20 @@ import streamlit as st
 import pymongo
 import re
 import smtplib
-import certifi
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 # --- CONFIGURATION ---
-MONGO_URI = st.secrets["MONGO_URI"]
-EMAIL_PASSWORD = st.secrets.get("EMAIL_PASSWORD") 
+# This tries to load secrets from Cloud first, then falls back to local computer
+try:
+    MONGO_URI = st.secrets["MONGO_URI"]
+    EMAIL_PASSWORD = st.secrets.get("EMAIL_PASSWORD")
+except FileNotFoundError:
+    # If running locally without .streamlit/secrets.toml, this will fail gracefully
+    st.error("Secrets not found. Please make sure you have a .streamlit/secrets.toml file locally.")
+    st.stop()
+
 EMAIL_SENDER = "evan.sharp.303@gmail.com"
 
 st.set_page_config(page_title="Ask Your Mother", page_icon="☕")
@@ -59,12 +65,12 @@ def send_welcome_email(recipient):
         print(f"Welcome email failed: {e}")
 
 def send_admin_notification(new_subscriber):
-    """NEW: Sends an alert to YOU when someone signs up."""
+    """Sends an alert to YOU when someone signs up."""
     if not EMAIL_PASSWORD: return
     
     msg = MIMEMultipart()
     msg['From'] = "Signup Bot <" + EMAIL_SENDER + ">"
-    msg['To'] = EMAIL_SENDER  # Sends to yourself
+    msg['To'] = EMAIL_SENDER
     msg['Subject'] = f"New Subscriber! 🚀 ({new_subscriber})"
     
     body = f"Heads up! {new_subscriber} just joined the list."
@@ -90,9 +96,10 @@ with st.form("signup_form"):
     if submitted:
         if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
             try:
-                # SSL FIX: Added tlsCAFile
-                # Bypass SSL verification to fix the Mac/Colombia connection issue
+                # --- THE FIX ---
+                # We force the app to bypass the SSL check that is failing in the cloud
                 client = pymongo.MongoClient(MONGO_URI, tlsAllowInvalidCertificates=True)
+                
                 db = client.dad_digest_db
                 subscribers = db.subscribers
                 
@@ -105,10 +112,7 @@ with st.form("signup_form"):
                         "active": True
                     })
                     
-                    # 1. Send welcome to them
                     send_welcome_email(email)
-                    
-                    # 2. Send alert to YOU
                     send_admin_notification(email)
                     
                     st.success("Welcome aboard! Check your inbox for a confirmation.")

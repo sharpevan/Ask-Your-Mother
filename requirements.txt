@@ -1,6 +1,8 @@
+streamlit
+requests
+beautifulsoup4
 feedparser
 pymongo
-dnspython
-google-genai
-streamlit
 certifi
+google-genai
+toml

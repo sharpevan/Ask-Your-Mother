@@ -45,20 +45,37 @@ def get_db_connection():
 
 def send_welcome_email(recipient):
     if not EMAIL_PASSWORD: return
+    
     msg = MIMEMultipart()
     msg['From'] = "The Man-ual for Dads <" + EMAIL_SENDER + ">"
     msg['To'] = recipient
     msg['Subject'] = "Welcome! ☕"
     
-    # NOTE: We will eventually add the unsubscribe link here dynamically
-    html = """
+    # 1. Define the Unsubscribe Link
+    unsubscribe_link = f"https://askyourmother.streamlit.app/?unsubscribe={recipient}"
+    
+    # 2. Add it to the HTML footer
+    html = f"""
     <div style="font-family: Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2 style="text-transform: uppercase; letter-spacing: -1px;">You're on the list.</h2>
         <p>Thanks for subscribing to <strong>Ask Your Mother</strong>.</p>
+        <p>Every Friday morning, you'll get a curated digest of:</p>
+        <ul>
+            <li>3 Articles worth reading</li>
+            <li>1 Podcast for the commute</li>
+            <li>1 Video to watch</li>
+        </ul>
+        <p>No spam, just the good stuff.</p>
         <p>- Evan</p>
+        <br>
+        <hr style="border: 0; border-top: 1px solid #eee;">
+        <p style="font-size: 12px; color: #888;">
+            <a href="{unsubscribe_link}" style="color: #888; text-decoration: underline;">Unsubscribe</a>
+        </p>
     </div>
     """
     msg.attach(MIMEText(html, 'html'))
+    
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(EMAIL_SENDER, EMAIL_PASSWORD)

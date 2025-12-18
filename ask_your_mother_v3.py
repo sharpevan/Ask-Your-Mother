@@ -1,48 +1,43 @@
-import feedparser
-import smtplib
-import re
-import random
-import pymongo
 import os
+import toml  # pip install toml
+import pymongo
 import certifi
+import requests
+import google.genai as genai
+import smtplib
+import feedparser 
+import re         
+import random
+import time     
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
-from google import genai
-from google.genai import types
 
-# --- CONFIGURATION ---
-# We use .get() so it doesn't crash if a key is missing locally
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
-EMAIL_SENDER = "evan.sharp.303@gmail.com"
-MONGO_URI = os.environ.get("MONGO_URI")
+# --- UNIVERSAL SECRET LOADER ---
+try:
+    secrets = toml.load(".streamlit/secrets.toml")
+    MONGO_URI = secrets["MONGO_URI"]
+    EMAIL_PASSWORD = secrets["EMAIL_PASSWORD"]
+    EMAIL_SENDER = secrets["EMAIL_SENDER"]
+    GEMINI_API_KEY = secrets.get("GOOGLE_API_KEY") or secrets.get("GEMINI_API_KEY")
+    print("✅ Secrets loaded from local file.")
+except Exception as e:
+    print(f"⚠️ Could not load local secrets ({e}). Checking Environment variables...")
+    MONGO_URI = os.getenv("MONGO_URI")
+    EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+    EMAIL_SENDER = os.getenv("EMAIL_SENDER")
+    GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# If running locally without a .env file, you can uncomment these lines for testing:
-# GEMINI_API_KEY = "Your-Key"
-# EMAIL_PASSWORD = "Your-Pass"
-# MONGO_URI = "Your-URI"
+# --- CRITICAL SAFETY CHECK ---
+if not MONGO_URI or not GEMINI_API_KEY:
+    print("❌ FATAL ERROR: Secrets are missing.")
+    exit()
 
-# MONGODB CONNECTION
-MONGO_URI = "mongodb+srv://evansharp_db_user:poop@clusterduck.asjjrav.mongodb.net/?retryWrites=true&w=majority"
-
-def get_subscribers():
-    """Fetches all active subscribers from MongoDB."""
-    try:
-        client = pymongo.MongoClient(MONGO_URI)
-        db = client.dad_digest_db
-        # Return a list of just the email strings
-        users = [u['email'] for u in db.subscribers.find({"active": True})]
-        # Always ensure YOU are on the list for testing
-        if "evan.sharp.303@gmail.com" not in users:
-            users.append("evan.sharp.303@gmail.com")
-        return users
-    except Exception as e:
-        print(f"Error fetching subscribers: {e}")
-        return ["evan.sharp.303@gmail.com"] # Fallback
-
-# Replace the hardcoded list with the function call
-FRIEND_LIST = get_subscribers()
+# --- CONFIGURE AI ---
+try:
+    client = genai.Client(api_key=GEMINI_API_KEY)
+except Exception as e:
+    print(f"❌ AI Client Error: {e}")
 
 # --- SOURCES ---
 READ_FEEDS = [
@@ -73,19 +68,16 @@ def fetch_content():
     content_pool = {'read': [], 'listen': [], 'watch': []}
     window_start = datetime.now() - timedelta(days=30)
     
-    # Mongo Check (Now with SSL Fix)
     try:
-        # We force the SSL certificate path here
         client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
         db = client.dad_digest_db
         archive = db.articles
-        # Quick test to see if connection actually works
         client.admin.command('ping')
         mongo_active = True
         print("Connected to MongoDB!")
     except Exception as e:
         mongo_active = False
-        print(f"MongoDB unavailable (running in offline mode): {e}")
+        print(f"MongoDB unavailable: {e}")
 
     def process_feeds(feed_list, category):
         for url in feed_list:
@@ -99,12 +91,8 @@ def fetch_content():
                     if published:
                         dt_published = datetime(*published[:6])
                         if dt_published > window_start:
-                            
-                            # SAFETY FIX: Handle missing links gracefully
                             link = entry.get('link', entry.get('guid', ''))
                             if not link: continue
-
-                            # Deduplication
                             if mongo_active and archive.find_one({"link": link}):
                                 continue
                             
@@ -121,7 +109,6 @@ def fetch_content():
     process_feeds(READ_FEEDS, 'read')
     process_feeds(LISTEN_FEEDS, 'listen')
     process_feeds(WATCH_FEEDS, 'watch')
-    
     return content_pool
 
 def ai_curate_content(content_pool):
@@ -131,6 +118,7 @@ def ai_curate_content(content_pool):
     random.shuffle(content_pool['listen'])
     random.shuffle(content_pool['watch'])
 
+    # [DATA PREP - No changes here]
     input_text = "--- READING OPTIONS ---\n"
     for i, a in enumerate(content_pool['read'][:15]):
         input_text += f"READ_{i} | Source: {a['source']} | Title: {a['title']} | Summary: {a['summary']}\n\n"
@@ -184,27 +172,36 @@ def ai_curate_content(content_pool):
     """
     
     print("Asking Gemini to curate...")
+    
+    # --- RETRY LOOP ---
     client = genai.Client(api_key=GEMINI_API_KEY)
-    response = client.models.generate_content(
-        model="gemini-flash-latest",
-        contents=prompt
-    )
-    return response.text
+    
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model="gemini-flash-latest",
+                contents=prompt
+            )
+            return response.text
+        except Exception as e:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                print(f"⚠️ Rate limit hit. Waiting 30 seconds... (Attempt {attempt+1}/3)")
+                time.sleep(30)
+            else:
+                print(f"❌ AI Error: {e}")
+                return None
+    
+    print("❌ Failed after 3 attempts.")
+    return None
 
-# --- NEW: SAVE TO MEMORY ---
 def save_sent_articles(html_content):
-    """Scans the email we just generated, finds links, and saves to Mongo."""
     try:
-        client = pymongo.MongoClient(MONGO_URI)
+        client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
         db = client.dad_digest_db
         archive = db.articles
-        
-        # Regex to find all href="http..." in the email
         links = re.findall(r'href="(http[^"]+)"', html_content)
-        
         count = 0
         for link in links:
-            # We insert with a unique index on 'link' to prevent dupes
             if not archive.find_one({"link": link}):
                 archive.insert_one({
                     "link": link,
@@ -212,17 +209,24 @@ def save_sent_articles(html_content):
                     "status": "sent"
                 })
                 count += 1
-        print(f"Memory updated: Saved {count} new items to MongoDB.")
+        print(f"Memory updated: Saved {count} new items.")
     except Exception as e:
         print(f"Memory Error: {e}")
 
 def send_email(content, recipient):
     print(f"Sending to {recipient}...")
+    
+    # 1. Clean the AI content safely (This fixes the syntax error)
+    clean_body = content.replace("```html", "").replace("```", "")
+    
+    unsubscribe_link = f"https://askyourmother.streamlit.app/?unsubscribe={recipient}"
+    
     msg = MIMEMultipart()
-    msg['From'] = EMAIL_SENDER
+    msg['From'] = f"The Man-ual for Dads <{EMAIL_SENDER}>"
     msg['To'] = recipient
     msg['Subject'] = f"Ask Your Mother: {datetime.now().strftime('%b %d')}"
 
+    # 2. Insert clean_body into the template
     full_html = f"""
     <html>
         <body style="font-family: Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; padding: 20px;">
@@ -231,10 +235,12 @@ def send_email(content, recipient):
                 <p style="margin: 5px 0 0; color: #666; font-size: 11px; text-transform: uppercase; letter-spacing: 3px;">The Weekly Man-ual</p>
             </div>
             
-            {content.replace("```html", "").replace("```", "")}
+            {clean_body}
             
             <div style="text-align: center; font-size: 11px; color: #aaa; padding-top: 50px; margin-top: 50px; border-top: 1px solid #eee;">
                 Powered by Python, Gemini, Coffee & Evan Sharp
+                <br><br>
+                <a href="{unsubscribe_link}" style="color: #aaa; text-decoration: underline;">Unsubscribe</a>
             </div>
         </body>
     </html>
@@ -249,14 +255,26 @@ def send_email(content, recipient):
 
 if __name__ == "__main__":
     content = fetch_content()
+    
     if content['read']:
         email_body = ai_curate_content(content)
+        
         if email_body:
-            # 1. Send to friends
-            for friend in FRIEND_LIST:
-                send_email(email_body, friend)
-            
-            # 2. Save to Memory (NEW)
-            save_sent_articles(email_body)
+            try:
+                client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
+                db = client.dad_digest_db
+                subscribers = db.subscribers.find({"active": True})
+                
+                recipient_count = 0
+                for user in subscribers:
+                    send_email(email_body, user['email'])
+                    recipient_count += 1
+                
+                print(f"✅ Blast complete. Sent to {recipient_count} dads.")
+                save_sent_articles(email_body)
+                
+            except Exception as e:
+                print(f"Database Error: {e}")
+                
     else:
         print("Not enough content found.")

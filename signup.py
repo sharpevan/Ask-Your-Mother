@@ -2,20 +2,23 @@ import streamlit as st
 import pymongo
 import re
 import smtplib
-import certifi 
+import certifi
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 # --- CONFIGURATION ---
+# Load all secrets safely
 try:
     MONGO_URI = st.secrets["MONGO_URI"]
     EMAIL_PASSWORD = st.secrets.get("EMAIL_PASSWORD")
-except:
+    EMAIL_SENDER = st.secrets["EMAIL_SENDER"] # <--- SECURED HERE
+except FileNotFoundError:
     st.error("Secrets not found. Please check your .streamlit/secrets.toml file.")
     st.stop()
-
-EMAIL_SENDER = "evan.sharp.303@gmail.com"
+except KeyError as e:
+    st.error(f"Missing secret: {e}. Please update your secrets.toml or Streamlit Cloud settings.")
+    st.stop()
 
 st.set_page_config(page_title="Ask Your Mother", page_icon="☕")
 
@@ -87,8 +90,7 @@ with st.form("signup_form"):
     if submitted:
         if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
             try:
-                # --- FINAL CLOUD FIX ---
-                # We use certifi.where() which works best on Streamlit Cloud servers
+                # Cloud/Mac Universal Fix
                 client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
                 
                 db = client.dad_digest_db

@@ -2,29 +2,28 @@ name: Weekly Dad Digest
 
 on:
   schedule:
-    # Runs at 13:00 UTC every Friday
+    # Runs at 13:00 UTC (8:00 AM EST / 5:00 AM PST) every Friday
     - cron: '0 13 * * 5'
-  workflow_dispatch:
+  workflow_dispatch: # <--- This adds the "Run Now" button for testing
 
 jobs:
-  build:
+  send_digest:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      - name: Install libraries
+      - name: Install dependencies
         run: |
           pip install -r requirements.txt
 
       - name: Run Digest Script
         env:
-          # Make sure these match the variable names in your python script!
           MONGO_URI: ${{ secrets.MONGO_URI }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}

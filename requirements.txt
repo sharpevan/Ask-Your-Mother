@@ -1,8 +1,8 @@
 streamlit
 requests
-beautifulsoup4
 feedparser
 pymongo
 certifi
 google-genai
 toml
+tenacity

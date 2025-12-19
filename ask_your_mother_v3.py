@@ -207,17 +207,29 @@ def save_sent_articles(html_content):
         client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
         db = client.dad_digest_db
         archive = db.articles
-        links = re.findall(r'href="(http[^"]+)"', html_content)
+        
+        # IMPROVED REGEX: Catches single quotes, double quotes, and spaces
+        links = re.findall(r'href=["\']\s*(http[^"\']+)\s*["\']', html_content)
+        
         count = 0
+        skipped = 0
         for link in links:
-            if not archive.find_one({"link": link}):
+            # Strip whitespace and tracking params
+            clean_link = link.split('?')[0].strip()
+            
+            # Check if we've seen this clean link before
+            if not archive.find_one({"link": {"$regex": f"^{re.escape(clean_link)}"}}) :
                 archive.insert_one({
-                    "link": link,
+                    "link": clean_link,
+                    "original_full_link": link,
                     "sent_at": datetime.now(),
                     "status": "sent"
                 })
                 count += 1
-        print(f"Memory updated: Saved {count} new items.")
+            else:
+                skipped += 1
+                
+        print(f"Memory updated: Saved {count} new items. (Skipped {skipped} duplicates)")
     except Exception as e:
         print(f"Memory Error: {e}")
 

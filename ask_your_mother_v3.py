@@ -28,9 +28,17 @@ except Exception as e:
     EMAIL_SENDER = os.getenv("EMAIL_SENDER")
     GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
 
+# --- DIAGNOSTIC CHECK (Delete this after fixing) ---
+print(f"DEBUG: Checking Environment Variables...")
+print(f"1. MONGO_URI: {'✅ Found' if MONGO_URI else '❌ MISSING'}")
+print(f"2. EMAIL_SENDER: {'✅ Found' if EMAIL_SENDER else '❌ MISSING'}")
+print(f"3. EMAIL_PASSWORD: {'✅ Found' if EMAIL_PASSWORD else '❌ MISSING'}")
+print(f"4. GEMINI_API_KEY: {'✅ Found' if GEMINI_API_KEY else '❌ MISSING'}")
+
 # --- CRITICAL SAFETY CHECK ---
 if not MONGO_URI or not GEMINI_API_KEY:
-    print("❌ FATAL ERROR: Secrets are missing.")
+    print("❌ FATAL ERROR: One of the required secrets is NULL.")
+    print("If GEMINI_API_KEY is missing, check if your YAML uses 'GOOGLE_API_KEY' or 'GEMINI_API_KEY'.")
     exit()
 
 # --- CONFIGURE AI ---

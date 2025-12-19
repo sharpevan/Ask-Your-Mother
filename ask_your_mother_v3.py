@@ -31,9 +31,13 @@ except Exception as e:
 # --- DIAGNOSTIC CHECK ---
 print(f"DEBUG: Checking Environment Variables...")
 print(f"1. MONGO_URI: {'✅ Found' if MONGO_URI else '❌ MISSING'}")
-print(f"2. EMAIL_SENDER: {'✅ Found' if EMAIL_SENDER else '❌ MISSING'}")
-print(f"3. EMAIL_PASSWORD: {'✅ Found' if EMAIL_PASSWORD else '❌ MISSING'}")
-print(f"4. GEMINI_API_KEY: {'✅ Found' if GEMINI_API_KEY else '❌ MISSING'}")
+print(f"2. GEMINI_API_KEY Status: {'✅ Found' if GEMINI_API_KEY else '❌ MISSING'}")
+
+if GEMINI_API_KEY:
+    print(f"DEBUG: Key Length: {len(GEMINI_API_KEY)}")
+    print(f"DEBUG: Key Start: {GEMINI_API_KEY[:4]}...")
+    print(f"DEBUG: Ends with Newline? {'YES' if GEMINI_API_KEY.endswith('\n') else 'NO'}")
+    print(f"DEBUG: Ends with Space? {'YES' if GEMINI_API_KEY.endswith(' ') else 'NO'}")
 
 # --- CRITICAL SAFETY CHECK ---
 if not MONGO_URI or not GEMINI_API_KEY:

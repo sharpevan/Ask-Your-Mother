@@ -187,7 +187,7 @@ def ai_curate_content(content_pool):
     for attempt in range(3):
         try:
             response = client.models.generate_content(
-                model="gemini-1.5-flash",
+                model="gemini-flash-latest",
                 contents=prompt
             )
             return response.text

@@ -136,15 +136,15 @@ def ai_curate_content(content_pool):
     # [DATA PREP]
     input_text = "--- READING OPTIONS ---\n"
     for i, a in enumerate(content_pool['read'][:15]):
-        input_text += f"READ_{i} | Source: {a['source']} | Title: {a['title']} | Summary: {a['summary']}\n\n"
+        input_text += f"READ_{i} | Source: {a['source']} | Title: {a['title']} | Link: {a['link']} | Summary: {a['summary']}\n\n"
     
     input_text += "--- LISTENING OPTIONS ---\n"
     for i, a in enumerate(content_pool['listen'][:5]):
-        input_text += f"LISTEN_{i} | Source: {a['source']} | Title: {a['title']} | Summary: {a['summary']}\n\n"
+        input_text += f"LISTEN_{i} | Source: {a['source']} | Title: {a['title']} | Link: {a['link']} | Summary: {a['summary']}\n\n"
 
     input_text += "--- WATCHING OPTIONS ---\n"
     for i, a in enumerate(content_pool['watch'][:5]):
-        input_text += f"WATCH_{i} | Source: {a['source']} | Title: {a['title']} | Summary: {a['summary']}\n\n"
+        input_text += f"WATCH_{i} | Source: {a['source']} | Title: {a['title']} | Link: {a['link']} | Summary: {a['summary']}\n\n"
 
     prompt = f"""
     You are the editor of "Ask Your Mother," a weekly digest for a dad of children under 5.

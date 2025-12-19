@@ -27,5 +27,5 @@ jobs:
           MONGO_URI: ${{ secrets.MONGO_URI }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python ask_your_mother_v3.py

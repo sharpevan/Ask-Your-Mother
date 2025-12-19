@@ -1,8 +1,7 @@
 import os
-import toml  # pip install toml
+import toml
 import pymongo
 import certifi
-import requests
 import google.genai as genai
 import smtplib
 import feedparser 
@@ -19,16 +18,17 @@ try:
     MONGO_URI = secrets["MONGO_URI"]
     EMAIL_PASSWORD = secrets["EMAIL_PASSWORD"]
     EMAIL_SENDER = secrets["EMAIL_SENDER"]
+    # LOGIC UPDATE: We try the new correct name first
     GEMINI_API_KEY = secrets.get("GOOGLE_API_KEY") or secrets.get("GEMINI_API_KEY")
     print("✅ Secrets loaded from local file.")
 except Exception as e:
-    print(f"⚠️ Could not load local secrets ({e}). Checking Environment variables...")
+    print(f"⚠️ Could not load local secrets. Checking Environment variables...")
     MONGO_URI = os.getenv("MONGO_URI")
     EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
     EMAIL_SENDER = os.getenv("EMAIL_SENDER")
     GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# --- DIAGNOSTIC CHECK (Delete this after fixing) ---
+# --- DIAGNOSTIC CHECK ---
 print(f"DEBUG: Checking Environment Variables...")
 print(f"1. MONGO_URI: {'✅ Found' if MONGO_URI else '❌ MISSING'}")
 print(f"2. EMAIL_SENDER: {'✅ Found' if EMAIL_SENDER else '❌ MISSING'}")
@@ -38,7 +38,6 @@ print(f"4. GEMINI_API_KEY: {'✅ Found' if GEMINI_API_KEY else '❌ MISSING'}")
 # --- CRITICAL SAFETY CHECK ---
 if not MONGO_URI or not GEMINI_API_KEY:
     print("❌ FATAL ERROR: One of the required secrets is NULL.")
-    print("If GEMINI_API_KEY is missing, check if your YAML uses 'GOOGLE_API_KEY' or 'GEMINI_API_KEY'.")
     exit()
 
 # --- CONFIGURE AI ---
@@ -126,7 +125,7 @@ def ai_curate_content(content_pool):
     random.shuffle(content_pool['listen'])
     random.shuffle(content_pool['watch'])
 
-    # [DATA PREP - No changes here]
+    # [DATA PREP]
     input_text = "--- READING OPTIONS ---\n"
     for i, a in enumerate(content_pool['read'][:15]):
         input_text += f"READ_{i} | Source: {a['source']} | Title: {a['title']} | Summary: {a['summary']}\n\n"
@@ -149,11 +148,9 @@ def ai_curate_content(content_pool):
     3. **1 Video** (Watching).
 
     OUTPUT FORMAT (Strict HTML):
-    
     <div style="margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 5px;">
         <h2 style="font-size: 14px; letter-spacing: 2px; margin: 0;">READING</h2>
     </div>
-    
     [INSERT 3 READING ARTICLES HERE USING THIS CARD FORMAT:]
     <div style="margin-bottom: 30px;">
         <div style="font-size: 11px; color: #888; font-weight: bold; margin-bottom: 5px;">[SOURCE NAME]</div>
@@ -162,19 +159,14 @@ def ai_curate_content(content_pool):
         </div>
         <div style="font-size: 14px; color: #444; line-height: 1.5;">[PUNCHY SUMMARY]</div>
     </div>
-
     <div style="margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 40px;">
         <h2 style="font-size: 14px; letter-spacing: 2px; margin: 0;">LISTENING</h2>
     </div>
-    
     [INSERT 1 PODCAST HERE]
-
     <div style="margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 40px;">
         <h2 style="font-size: 14px; letter-spacing: 2px; margin: 0;">WATCHING</h2>
     </div>
-    
     [INSERT 1 VIDEO HERE]
-    
     CONTENT POOL:
     {input_text}
     """
@@ -187,7 +179,7 @@ def ai_curate_content(content_pool):
     for attempt in range(3):
         try:
             response = client.models.generate_content(
-                model="gemini-flash-latest",
+                model="gemini-1.5-flash",
                 contents=prompt
             )
             return response.text
@@ -223,10 +215,7 @@ def save_sent_articles(html_content):
 
 def send_email(content, recipient):
     print(f"Sending to {recipient}...")
-    
-    # 1. Clean the AI content safely (This fixes the syntax error)
     clean_body = content.replace("```html", "").replace("```", "")
-    
     unsubscribe_link = f"https://askyourmother.streamlit.app/?unsubscribe={recipient}"
     
     msg = MIMEMultipart()
@@ -234,7 +223,6 @@ def send_email(content, recipient):
     msg['To'] = recipient
     msg['Subject'] = f"Ask Your Mother: {datetime.now().strftime('%b %d')}"
 
-    # 2. Insert clean_body into the template
     full_html = f"""
     <html>
         <body style="font-family: Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; padding: 20px;">
@@ -242,12 +230,15 @@ def send_email(content, recipient):
                 <h1 style="margin: 0; font-size: 32px; letter-spacing: -1px; text-transform: uppercase;">Ask Your Mother</h1>
                 <p style="margin: 5px 0 0; color: #666; font-size: 11px; text-transform: uppercase; letter-spacing: 3px;">The Weekly Man-ual</p>
             </div>
-            
             {clean_body}
-            
             <div style="text-align: center; font-size: 11px; color: #aaa; padding-top: 50px; margin-top: 50px; border-top: 1px solid #eee;">
                 Powered by Python, Gemini, Coffee & Evan Sharp
                 <br><br>
+                <p style="font-size: 14px; margin-bottom: 20px;">
+                    How was this issue? 
+                    <a href="https://askyourmother.streamlit.app/?vote=up" style="text-decoration: none;">👍 Great</a> &nbsp;|&nbsp; 
+                    <a href="https://askyourmother.streamlit.app/?vote=down" style="text-decoration: none;">👎 Needs Work</a>
+                </p>
                 <a href="{unsubscribe_link}" style="color: #aaa; text-decoration: underline;">Unsubscribe</a>
             </div>
         </body>
@@ -262,28 +253,40 @@ def send_email(content, recipient):
     print("Sent.")
 
 if __name__ == "__main__":
+    # --- SMART SAFETY SWITCH ---
+    TEST_MODE = True
+    # If the YAML says "DIGEST_MODE: LIVE", we turn off test mode.
+    # Otherwise, it defaults to Safe Mode (only you).
+    if os.getenv("DIGEST_MODE") == "LIVE":
+        TEST_MODE = False
+    
+    print(f"--- STARTING RUN (TEST_MODE: {TEST_MODE}) ---")
     content = fetch_content()
     
     if content['read']:
         email_body = ai_curate_content(content)
-        
         if email_body:
             try:
                 client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
                 db = client.dad_digest_db
-                subscribers = db.subscribers.find({"active": True})
+                
+                if TEST_MODE:
+                    print("🛡️ SAFE MODE: Sending to Admin only.")
+                    recipients = [{"email": "evan.sharp.303@gmail.com"}] 
+                else:
+                    print("🚀 LIVE MODE: Fetching all active subscribers...")
+                    recipients = db.subscribers.find({"active": True})
                 
                 recipient_count = 0
-                for user in subscribers:
-                    send_email(email_body, user['email'])
+                for user in recipients:
+                    target_email = user.get('email')
+                    send_email(email_body, target_email)
                     recipient_count += 1
                 
-                print(f"✅ Blast complete. Sent to {recipient_count} dads.")
-                save_sent_articles(email_body)
-                
+                print(f"✅ Process complete. Sent to {recipient_count} dads.")
+                if not TEST_MODE:
+                    save_sent_articles(email_body)
             except Exception as e:
                 print(f"Database Error: {e}")
-                
     else:
         print("Not enough content found.")
-        

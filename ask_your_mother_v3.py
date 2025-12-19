@@ -29,15 +29,19 @@ except Exception as e:
     GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # --- DIAGNOSTIC CHECK ---
-print(f"DEBUG: Checking Environment Variables...")
+print("DEBUG: Checking Environment Variables...")
 print(f"1. MONGO_URI: {'✅ Found' if MONGO_URI else '❌ MISSING'}")
 print(f"2. GEMINI_API_KEY Status: {'✅ Found' if GEMINI_API_KEY else '❌ MISSING'}")
 
 if GEMINI_API_KEY:
     print(f"DEBUG: Key Length: {len(GEMINI_API_KEY)}")
     print(f"DEBUG: Key Start: {GEMINI_API_KEY[:4]}...")
-    print(f"DEBUG: Ends with Newline? {'YES' if GEMINI_API_KEY.endswith('\n') else 'NO'}")
-    print(f"DEBUG: Ends with Space? {'YES' if GEMINI_API_KEY.endswith(' ') else 'NO'}")
+    
+    # Check for newline safely (Compatible with Python 3.9)
+    has_newline = GEMINI_API_KEY.endswith('\n')
+    has_space = GEMINI_API_KEY.endswith(' ')
+    print(f"DEBUG: Ends with Newline? {'YES' if has_newline else 'NO'}")
+    print(f"DEBUG: Ends with Space? {'YES' if has_space else 'NO'}")
 
 # --- CRITICAL SAFETY CHECK ---
 if not MONGO_URI or not GEMINI_API_KEY:

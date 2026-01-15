@@ -126,6 +126,27 @@ def fetch_content():
     process_feeds(WATCH_FEEDS, 'watch')
     return content_pool
 
+def generate_fallback_email(content_pool):
+    print("⚠️ GENERATING FALLBACK EMAIL (No AI)...")
+    html = """
+    <div style="margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 5px;">
+        <h2 style="font-size: 14px; letter-spacing: 2px; margin: 0;">READING (FALLBACK)</h2>
+    </div>
+    """
+    
+    # Just grab the first 3 readable items
+    for item in content_pool['read'][:3]:
+        html += f"""
+        <div style="margin-bottom: 30px;">
+            <div style="font-size: 11px; color: #888; font-weight: bold; margin-bottom: 5px;">{item['source']}</div>
+            <div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">
+                <a href="{item['link']}" style="color: #000; text-decoration: none;">{item['title']}</a>
+            </div>
+            <div style="font-size: 14px; color: #444; line-height: 1.5;">{item['summary']}</div>
+        </div>
+        """
+    return html
+
 def ai_curate_content(content_pool):
     if not content_pool['read']: return None
     
@@ -275,8 +296,6 @@ def send_email(content, recipient):
 if __name__ == "__main__":
     # --- SMART SAFETY SWITCH ---
     TEST_MODE = True
-    # If the YAML says "DIGEST_MODE: LIVE", we turn off test mode.
-    # Otherwise, it defaults to Safe Mode (only you).
     if os.getenv("DIGEST_MODE") == "LIVE":
         TEST_MODE = False
     
@@ -284,7 +303,14 @@ if __name__ == "__main__":
     content = fetch_content()
     
     if content['read']:
+        # 1. Try AI First
         email_body = ai_curate_content(content)
+        
+        # 2. If AI failed (returned None), use Fallback
+        if not email_body:
+            print("❌ AI failed to curate. Switching to Fallback Mode.")
+            email_body = generate_fallback_email(content)
+            
         if email_body:
             try:
                 client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
@@ -304,8 +330,11 @@ if __name__ == "__main__":
                     recipient_count += 1
                 
                 print(f"✅ Process complete. Sent to {recipient_count} dads.")
+                
+                # 3. Save to Memory (Works for both AI and Fallback)
                 if not TEST_MODE:
                     save_sent_articles(email_body)
+                    
             except Exception as e:
                 print(f"Database Error: {e}")
     else:

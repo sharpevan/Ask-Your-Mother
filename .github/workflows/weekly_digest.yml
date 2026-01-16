@@ -29,3 +29,4 @@ jobs:
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_KEY_V2 }}
         run: python ask_your_mother_v3.py
+        # trigger

@@ -21,5 +21,5 @@ jobs:
 
       - name: Run Verification Script
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_KEY_V2 }}
         run: python verify_connection.py

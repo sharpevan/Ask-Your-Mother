@@ -18,14 +18,15 @@ try:
     MONGO_URI = secrets["MONGO_URI"]
     EMAIL_PASSWORD = secrets["EMAIL_PASSWORD"]
     EMAIL_SENDER = secrets["EMAIL_SENDER"]
-    # LOGIC UPDATE: We try the new correct name first
-    GEMINI_API_KEY = secrets.get("GOOGLE_API_KEY") or secrets.get("GEMINI_API_KEY")
+    # CLEANUP: Just look for the correct name
+    GEMINI_API_KEY = secrets["GEMINI_API_KEY"]
     print("✅ Secrets loaded from local file.")
 except Exception as e:
     print(f"⚠️ Could not load local secrets. Checking Environment variables...")
     MONGO_URI = os.getenv("MONGO_URI")
     EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
     EMAIL_SENDER = os.getenv("EMAIL_SENDER")
+    # CRITICAL FIX BELOW: Changed from "GOOGLE_API_KEY" to "GEMINI_API_KEY"
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # --- DIAGNOSTIC CHECK ---

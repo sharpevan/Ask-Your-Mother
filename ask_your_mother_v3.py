@@ -26,7 +26,7 @@ except Exception as e:
     MONGO_URI = os.getenv("MONGO_URI")
     EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
     EMAIL_SENDER = os.getenv("EMAIL_SENDER")
-    GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # --- DIAGNOSTIC CHECK ---
 print("DEBUG: Checking Environment Variables...")

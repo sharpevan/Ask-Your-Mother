@@ -13,20 +13,28 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 
 # --- UNIVERSAL SECRET LOADER ---
+import pathlib
 try:
-    secrets = toml.load(".streamlit/secrets.toml")
+    # Force Python to look in the exact folder where this script lives
+    script_dir = pathlib.Path(__file__).parent.absolute()
+    secrets_path = script_dir / ".streamlit" / "secrets.toml"
+    
+    print(f"DEBUG: Looking for secrets at: {secrets_path}")
+    
+    secrets = toml.load(str(secrets_path))
     MONGO_URI = secrets["MONGO_URI"]
     EMAIL_PASSWORD = secrets["EMAIL_PASSWORD"]
     EMAIL_SENDER = secrets["EMAIL_SENDER"]
-    # CLEANUP: Just look for the correct name
     GEMINI_API_KEY = secrets["GEMINI_API_KEY"]
     print("✅ Secrets loaded from local file.")
+    
 except Exception as e:
-    print(f"⚠️ Could not load local secrets. Checking Environment variables...")
+    # THIS IS THE IMPORTANT PART: It will now print the specific error
+    print(f"⚠️ Could not load local secrets. Error details: {e}")
+    print("Checking Environment variables...")
     MONGO_URI = os.getenv("MONGO_URI")
     EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
     EMAIL_SENDER = os.getenv("EMAIL_SENDER")
-    # CRITICAL FIX BELOW: Changed from "GOOGLE_API_KEY" to "GEMINI_API_KEY"
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # --- DIAGNOSTIC CHECK ---
@@ -209,7 +217,7 @@ def ai_curate_content(content_pool):
     for attempt in range(3):
         try:
             response = client.models.generate_content(
-                model="gemini-flash-latest",
+                model= "gemini-3-flash-preview",
                 contents=prompt
             )
             return response.text
